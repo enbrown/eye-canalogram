@@ -11,3 +11,5 @@ License: AGPL-3
 LazyData: TRUE
 Imports: ggplot2, grid, reshape2, mgcv, dplyr, EBImage
 Suggests: knitr
+URL: https://github.com/enbrown/eye-canalogram
+BugReports: https://github.com/enbrown/eye-canalogram/issues
