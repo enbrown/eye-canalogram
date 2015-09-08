@@ -2,6 +2,8 @@
 
 S3method(plot,CanalogramImages)
 S3method(plot,CanaogramGAM)
+S3method(plot,DeltaCanaogramGAM)
+export(delta.gam)
 export(fit.gam)
 export(plot.dot)
 export(plot.grid)

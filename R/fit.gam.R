@@ -1,10 +1,8 @@
 #' fit.gam
 #'
 #' @param obj             CanalogramImages object
-#' @param center          Corneal center coordinates (or NA to compute)
 #' @param r_bands         Number of radial bands to fit
 #' @param theta_band_size Degrees per angular band
-#' @param center_search   Options for corneal center search
 #' @param fit.grid        Whether to fit the models to each grid point
 #' @param fit.bands       Whether to fit a global model to bands
 #'
@@ -22,9 +20,7 @@
 #' plot.images(fit)
 #' plot.ring(fit)
 #' }
-fit.gam <- function(obj, center = NA, r_bands = 5, theta_band_size = 10,
-                    center_search = list(span = 3, step = 0.25,
-                                         frames = 3, threshold = 0.5, percentage = 0.95),
+fit.gam <- function(obj, r_bands = 5, theta_band_size = 10,
                     fit.grid = TRUE, fit.bands = TRUE) {
   if (! inherits(obj, 'CanalogramImages')) {
     stop('Function fit.gam only works on CanalogramImages objects\n')
@@ -32,12 +28,9 @@ fit.gam <- function(obj, center = NA, r_bands = 5, theta_band_size = 10,
 
   # Build up the return object
   obj$gam <- list(
-    options = list(center = center,
-                   r_bands = r_bands,
+    options = list(r_bands = r_bands,
                    theta_band_size = theta_band_size),
     data = NA,
-    cornea_mask = NA,
-    centers = NA,
     center = NA,
     cornea_radius = NA,
     clock_data = NA,
@@ -63,31 +56,23 @@ fit.gam <- function(obj, center = NA, r_bands = 5, theta_band_size = 10,
     stop('No data found for function fit.gam')
   }
 
-  # Get the cornea mask as a data.frame
-  if (!is.null(obj$mask) && inherits(obj$mask, 'Image')) {
-    cornea_mask <- reshape2::melt(obj$mask)
-    colnames(cornea_mask) <- c('x','y','I')
-    obj$gam$cornea_mask <- cornea_mask
-  }
-
-  # Scale data to a 0 -- 1 range
+  # Scale data to a 0.0 -- 1.0 range
   obj <- update.data.scale(obj)
 
-  # Determine the best center
-  message('Updating corneal centers')
-  obj <- update.centers(obj, center_search)
-  if (any(is.na(center))) {
-    best <- which(obj$gam$centers$score == min(obj$gam$centers$score))[[1]]
-    center <- list(x = obj$gam$centers[best, 'x'],
-                   y = obj$gam$centers[best, 'y'])
-  }
+  # Get the base image resolution
+  obj$gam$resolution <- max(c(obj$gam$data$x, obj$gam$data$y))
+
+  # Clean up the data (do after setting the resolution)
+  obj$gam$data <- na.omit(obj$gam$data)
+
+  # Use the known/computed cornea center
+  center <- list(x = obj$cornea$center.x,
+                 y = obj$cornea$center.y)
   obj$gam$center <- center
+  obj$gam$cornea_radius <- obj$cornea$min.radius * obj$gam$resolution
 
   # Transform to radial basis
   obj <- update.radial.basis(obj)
-
-  # Determine the corneal radius
-  obj <- update.corneal.radius(obj, center_search = center_search)
 
   # Generate image masks
   obj <- update.masks(obj)
@@ -136,73 +121,10 @@ update.data.scale <- function(obj) {
   data <- obj$gam$data
 
   # Rescale the data
-  data$z <- data$I / max(data$I)
-
-  # Rescale the cornea mask (if it exists)
-  cornea_mask <- NA
-  if (inherits(obj$gam$cornea_mask, 'data.frame')) {
-    cornea_mask <- obj$gam$cornea_mask
-    cornea_mask$z <- cornea_mask$I / max(cornea_mask$I)
-  }
+  data$z <- data$I / max(data$I, na.rm=TRUE)
 
   # Update the object and return it
   obj$gam$data <- data
-  obj$gam$cornea_mask <- cornea_mask
-  return(invisible(obj))
-}
-
-
-update.centers <- function(obj,
-                        center_search = list(span = 3, step = 0.25,
-                                             frames = 3, threshold = 0.5, percentage = 0.95)) {
-  if (! inherits(obj, 'CanaogramGAM')) {
-    stop('Function update.centers requires a CanaogramGAM object\n')
-  }
-  if (! 'z' %in% colnames(obj$gam$data)) {
-    stop('Function update.data.scale needs to be run before update.centers')
-  }
-
-  # Get the object's data
-  if (inherits(obj$gam$cornea_mask, 'data.frame')) {
-    message('Using corneal mask to identify corneal center')
-    data <- obj$gam$cornea_mask
-  } else {
-    message('Using first ', center_search$frames, ' frames to identify corneal center')
-    data <- subset(obj$gam$data, t <= center_search$frames)
-  }
-
-  # Get the base image resolution
-  if (is.null(obj$gam$resolution) || is.na(obj$gam$resolution) || ! is.finite(obj$gam$resolution)) {
-    obj$gam$resolution <- max(c(data$x, data$y))
-  }
-  resolution <- obj$gam$resolution
-
-  # Centers to try
-  centers_x <- seq(mean(range(data$x)) - center_search$span,
-                   mean(range(data$x)) + center_search$span,
-                   by = center_search$step)
-  centers_y <- seq(mean(range(data$y)) - center_search$span,
-                   mean(range(data$y)) + center_search$span,
-                   by = center_search$step)
-  centers <- expand.grid(x = centers_x / resolution, y = centers_y / resolution)
-  centers$score <- Inf
-
-  # Try all potential centers
-  for (i in 1:nrow(centers)) {
-    # Try this center
-    center <- list(x = centers$x[i],
-                   y = centers$y[i])
-    data$X <- data$x - (center$x * resolution)
-    data$Y <- data$y - (center$y * resolution)
-    data$r <- sqrt(data$X * data$X + data$Y * data$Y)
-
-    # Score it (the 0.95'th quantile radius of those pixels more than 0.2 intensity in the first 3 frames)
-    sel <- data$z > center_search$threshold
-    centers$score[i] <- quantile(data$r[sel], center_search$percentage)
-  }
-
-  # Update the object and return it
-  obj$gam$centers <- centers
   return(invisible(obj))
 }
 
@@ -211,10 +133,10 @@ update.radial.basis <- function(obj) {
     stop('Function update.radial.basis requires a CanaogramGAM object\n')
   }
   if (! 'center' %in% names(obj$gam)) {
-    stop('Function update.centers needs to be run before update.radial.basis')
+    stop('Missing corneal center needed for update.radial.basis')
   }
   if (! 'resolution' %in% names(obj$gam)) {
-    stop('Function update.centers needs to be run before update.radial.basis')
+    stop('Missing resolution needed for update.radial.basis')
   }
 
   # Get the object's data
@@ -226,56 +148,17 @@ update.radial.basis <- function(obj) {
   data$X <- data$x - (center$x * resolution)
   data$Y <- data$y - (center$y * resolution)
   data$theta <- atan2(-data$X, -data$Y) * 180.0 / pi + 180.0
-  data$r <- sqrt(data$X * data$X + data$Y * data$Y)
+  data$R <- sqrt(data$X * data$X + data$Y * data$Y)
   data$X <- NULL
   data$Y <- NULL
 
-  if (inherits(obj$gam$cornea_mask, 'data.frame')) {
-    cornea_mask <- obj$gam$cornea_mask
-    cornea_mask$X <- cornea_mask$x - (center$x * resolution)
-    cornea_mask$Y <- cornea_mask$y - (center$y * resolution)
-    cornea_mask$theta <- atan2(-cornea_mask$X, -cornea_mask$Y) * 180.0 / pi + 180.0
-    cornea_mask$r <- sqrt(cornea_mask$X * cornea_mask$X + cornea_mask$Y * cornea_mask$Y)
-    cornea_mask$X <- NULL
-    cornea_mask$Y <- NULL
-    obj$gam$cornea_mask <- cornea_mask
-  }
+  # Use distance map for radius
+  mask.dist <- reshape2::melt(obj$mask.dist)
+  colnames(mask.dist) <- c('x','y','r')
+  data <- merge(data, mask.dist, by = c('x', 'y'))
 
   # Update the object and return it
   obj$gam$data <- data
-  return(invisible(obj))
-}
-
-update.corneal.radius <- function(obj,
-                                  center_search = list(frames = 3,
-                                                       threshold = 0.2,
-                                                       percentage = 0.95)) {
-  if (! inherits(obj, 'CanaogramGAM')) {
-    stop('Function get.centers requires a CanaogramGAM object\n')
-  }
-  if (! 'z' %in% colnames(obj$gam$data)) {
-    stop('Function update.data.scale needs to be run before update.corneal.radius')
-  }
-  if (! 'r' %in% colnames(obj$gam$data)) {
-    stop('Function update.radial.basis needs to be run before update.corneal.radius')
-  }
-
-  # Get the object's data
-  if (inherits(obj$gam$cornea_mask, 'data.frame')) {
-    data <- obj$gam$cornea_mask
-  } else {
-    data <- subset(obj$gam$data, t <= center_search$frames)
-  }
-
-  # Identify the cornea radius
-  # First only consider the pixels above the threshold (0.2) and in the first n frames (3 frames)
-  sel <- data$z > center_search$threshold
-
-  # Then find the radius that contains a percentage of those pixels (95%)
-  cornea_radius <- quantile(data$r[sel], center_search$percentage)
-
-  # Update the object and return it
-  obj$gam$cornea_radius <- cornea_radius
   return(invisible(obj))
 }
 
@@ -289,17 +172,11 @@ update.masks <- function(obj) {
 
   # Get the object's data
   data <- obj$gam$data
+  mask <- obj$cornea$mask
   cornea_radius <- obj$gam$cornea_radius
 
   # Mask those pixels in the cornea
-  if (inherits(obj$gam$cornea_mask, 'data.frame')) {
-    mask <- subset(obj$gam$cornea_mask, z > 0.75)[,c('x', 'y')]
-    mask$cornea <- TRUE
-    data <- merge(data, mask, all.x = TRUE, by = c('x', 'y'))
-    data$cornea[is.na(data$cornea)] <- FALSE
-  } else {
-    data$cornea <- (data$r <= cornea_radius)
-  }
+  #data$cornea <- (data$r < cornea_radius)
 
   # Mask those pixels at the border
   data$border <- data$x == min(data$x) | data$x == max(data$x) |
@@ -309,7 +186,8 @@ update.masks <- function(obj) {
   max_radius <- min(data$r[data$border] + 0.5)
 
   # Mask those pixels in the analysis region
-  data$mask <- (! data$cornea) & data$r <= max_radius
+  #data$mask <- (! data$cornea) & data$r <= max_radius
+  data$mask <- data$r <= max_radius
 
   # Update the object and return it
   obj$gam$data <- data
@@ -337,8 +215,8 @@ update.bands <- function(obj, theta_band_size = 10, r_bands = 5) {
   data$clock <- round(data$theta / 360.0 * 12.0)
   data$clock[data$clock == 0] <- 12
   data$theta_band <- theta_band_size * round(data$theta / theta_band_size)
-  band_width <- (max_radius - cornea_radius + 0.1) / r_bands
-  data$r_band <- floor((data$r - cornea_radius) / band_width)
+  band_width <- (max_radius - 1 + 0.1) / r_bands
+  data$r_band <- floor((data$r - 1) / band_width)
 
   # Update the object and return it
   obj$gam$data <- data
@@ -376,7 +254,6 @@ update.clock.data <- function(obj) {
 if(getRversion() >= "2.15.1") utils::globalVariables(c('mask',
                                                        't', 'clock', 'r_band',
                                                        'I', 'z', 'x'))
-
 
 update.fit <- function(obj) {
   if (! inherits(obj, 'CanaogramGAM')) {
@@ -420,7 +297,7 @@ update.fit.grid <- function(obj) {
   if (! inherits(obj, 'CanaogramGAM')) {
     stop('Function update.fit.grids requires a CanaogramGAM object\n')
   }
-  if (! 'cornea' %in% colnames(obj$gam$data)) {
+  if (! 'mask' %in% colnames(obj$gam$data)) {
     stop('Function update.masks needs to be run before update.fit.grids\n')
   }
 
@@ -431,7 +308,6 @@ update.fit.grid <- function(obj) {
 
   # Get which points need to be fit
   coords <- data %>%
-    dplyr::filter(! cornea) %>%
     dplyr::select(x, y) %>%
     dplyr::distinct()
   message('  Fitting ', nrow(coords), ' individual GAM models')
@@ -505,7 +381,7 @@ update.rings <- function(obj) {
 
   rings <- merge(data %>%
                    dplyr::filter(t == 1 & mask) %>%
-                   dplyr::select(-t, -I, -mask, -cornea, -border),
+                   dplyr::select(-t, -I, -mask, -border),
                  clock_metrics, all.x = TRUE)
   rings$min_fit[is.na(rings$min_fit)] <- 0
   rings$mid_fit[is.na(rings$mid_fit)] <- 0
@@ -531,7 +407,7 @@ update.grid.metrics <- function(obj, minimum_threshold = 0.0) {
   data <- obj$gam$data
 
   grid_metrics <- data %>%
-    dplyr::group_by(x, y) %>%
+    dplyr::group_by(x, y, r_band, theta_band) %>%
     dplyr::mutate(min_fit = min(grid.fit),
            max_fit = max(grid.fit),
            mid_fit = mean(range(grid.fit))) %>%

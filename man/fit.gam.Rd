@@ -4,20 +4,15 @@
 \alias{fit.gam}
 \title{fit.gam}
 \usage{
-fit.gam(obj, center = NA, r_bands = 5, theta_band_size = 10,
-  center_search = list(span = 3, step = 0.25, frames = 3, threshold = 0.5,
-  percentage = 0.95), fit.grid = TRUE, fit.bands = TRUE)
+fit.gam(obj, r_bands = 5, theta_band_size = 10, fit.grid = TRUE,
+  fit.bands = TRUE)
 }
 \arguments{
 \item{obj}{CanalogramImages object}
 
-\item{center}{Corneal center coordinates (or NA to compute)}
-
 \item{r_bands}{Number of radial bands to fit}
 
 \item{theta_band_size}{Degrees per angular band}
-
-\item{center_search}{Options for corneal center search}
 
 \item{fit.grid}{Whether to fit the models to each grid point}
 

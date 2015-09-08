@@ -6,6 +6,7 @@
 #' @param clean  Clean up after reading and rescaling images
 #'
 #' @return A CanalogramImages object containing all of the image data
+#'
 #' @export
 #'
 #' @examples
@@ -22,19 +23,24 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
     files.path = c(),
     images = list(),
     data = NA,
-    data.low = NA
+    data.low = NA,
+    mask.file = NA,
+    mask = NA
   )
   class(res) <- 'CanalogramImages'
 
   # Get all files in the directory
   res$files <- list.files(res$path,
                           all.files = FALSE, recursive = FALSE, include.dirs = FALSE, no.. = FALSE)
+
   # Get all files with the "root" in the filename (anywhere, not just the beginning)
   res$files <- grep(res$root, res$files,
                     fixed = TRUE, value = TRUE)
+
   # Restrict to TIFF files
   res$files <- grep('\\.(tif|tiff)$', res$files,
                     ignore.case = TRUE, perl = TRUE, value = TRUE)
+
   # Sort the files
   res$files <- sort(res$files)
 
@@ -43,22 +49,11 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
     res$files <- res$files[1:n]
   }
 
-  # See if there is an cornea mask
-  if (file.exists(file.path(res$path, 'mask.tif'))) {
-    message('Reading cornea mask')
-    file <- file.path(res$path, 'mask.tif')
-    mask <- EBImage::readImage(file, convert = TRUE, info = TRUE, as.is = TRUE)
-    mask <- EBImage::flip(mask)
-    res$maskFile <- file
-    res$mask <- mask
-  }
-
   # Expand the filename
   res$files.path <- file.path(res$path, res$files)
 
   # Load all of the files
   message('Reading images.')
-
   res$images <- lapply(res$files.path, function(f) {
     r <- list(file = f,
               image = NULL,
@@ -78,6 +73,28 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
   # The below assumes that all widths and heights are the same
   res$data <- EBImage::combine(lapply(res$images, function(i) {i$image})) # - res$images[[1]]$image}))
   res$data.low <- NA
+
+  # See if there is an cornea mask
+  cornea_mask <- file.path(res$path, 'mask.tif')
+  if (file.exists(cornea_mask)) {
+    message("Using cornea mask found in '", cornea_mask, "'.")
+    mask <- EBImage::readImage(cornea_mask, convert = TRUE, info = TRUE, as.is = TRUE)
+    mask <- EBImage::flip(mask)
+    # Convert to grayscale (in case the image is saved as RGB)
+    mask <- EBImage::channel(mask, 'gray')
+    res$maskFile <- cornea_mask
+    res$mask <- mask
+  } else {
+    res$maskFile <- NA
+    res$mask <- NA
+  }
+  rm(cornea_mask)
+
+  # Find a cornea mask
+  res <- find.cornea(res)
+
+  # Apply the cornea mask
+  res <- cornea.mask(res)
 
   # Rescale the images
   res <- rescale.images(res, low)
