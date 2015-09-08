@@ -28,7 +28,7 @@ plot.CanalogramImages <- function(x,
     data <- reshape2::melt(x$data.low)
   }
   colnames(data) <- c('x', 'y', 't', 'I')
-  data <- subset(data, t %in% frames)
+  data <- data[data$t %in% frames, , drop = FALSE]
 
   mytheme <- ggplot2::theme_bw() +
     ggplot2::theme(legend.position="right",
@@ -50,4 +50,4 @@ plot.CanalogramImages <- function(x,
   return(p)
 }
 
-if(getRversion() >= "2.15.1")  utils::globalVariables(c('y'))
+if(getRversion() >= "2.15.1")  utils::globalVariables(c('x', 'y', 't'))

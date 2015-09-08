@@ -3,6 +3,9 @@
 #' @param x           CanaogramGAM to plot
 #' @param which       Which plot type to create (rate, time, intensity, or all plots)
 #' @param resolution  Resolution at which to make the plot (can be higher than the data resolution)
+#' @param rate.max    Rate to plot at maximum brightness
+#' @param time.max    Time to plot at maximum brightness
+#' @param intensity.max Intensity to plot at maximum brightness
 #' @param ...         <not used>
 #'
 #' @return A ggplot2 object of the created plot(s)
@@ -17,7 +20,11 @@
 #' plot.ring(processed, which = 'all')
 #' }
 plot.ring <- function(x,
-                      which = c('rate', 'time', 'intensity', 'all'), resolution = NA,
+                      which = c('rate', 'time', 'intensity', 'all'),
+                      resolution = NA,
+                      rate.max = max(x$gam$rings$mid_rate),
+                      time.max = max(x$gam$data$t),
+                      intensity.max = 1.0,
                       ...) {
   if (! inherits(x, 'CanaogramGAM')) {
     stop('Function plot.ring requires a CanaogramGAM object\n')
@@ -28,28 +35,27 @@ plot.ring <- function(x,
   if (! is.finite(resolution)) {
     rings <- x$gam$rings
   } else {
-    bands <- round((x$gam$max_radius - x$gam$cornea_radius) / x$gam$band_width)
+    bands <- round((x$gam$max_radius - 1) / x$gam$band_width)
     rings <- expand.grid(x = 1:resolution, y = 1:resolution)
 
     # Get the object's data
-    center <- x$gam$center
-    cornea_radius <- x$gam$cornea_radius / x$gam$resolution
-    band_width <- x$gam$band_width / x$gam$resolution
-    max_radius <- x$gam$max_radius / x$gam$resolution
+    min_radius <- 0.25
+    max_radius <- 0.50
 
     # Transform to radial basis
-    rings$X <- rings$x - (center$x * resolution)
-    rings$Y <- rings$y - (center$y * resolution)
+    rings$X <- rings$x / resolution - 0.5
+    rings$Y <- rings$y / resolution - 0.5
     rings$theta <- atan2(-rings$X, -rings$Y) * 180.0 / pi + 180.0
     rings$r <- sqrt(rings$X * rings$X + rings$Y * rings$Y)
     rings$X <- NULL
     rings$Y <- NULL
-    rings <- subset(rings, r >= cornea_radius * resolution & r <= max_radius * resolution)
+    rings <- subset(rings, r >= min_radius & r <= max_radius)
 
     # Transform into a clock basis
     rings$clock <- round(rings$theta / 360.0 * 12.0)
     rings$clock[rings$clock == 0] <- 12
-    rings$r_band <- floor((rings$r - cornea_radius * resolution) / (band_width * resolution))
+    band_width <- (max_radius - min_radius) / bands
+    rings$r_band <- floor((rings$r - min_radius) / band_width)
 
     # Fill in the data
     rings <- merge(rings, x$gam$clock_metrics, all.x = TRUE)
@@ -78,7 +84,7 @@ plot.ring <- function(x,
       coord_fixed(ratio = 1) + xlab("") + ylab("") +
       ggtitle("Half-Intensity") +
       geom_raster() +
-      scale_fill_gradient('Half-\nIntensity', limits = c(0, 1.0),
+      scale_fill_gradient('Half-\nIntensity', limits = c(0, intensity.max),
                           low = '#000000', high = '#FF0000') +
       mytheme
     return(p)
@@ -89,18 +95,19 @@ plot.ring <- function(x,
       coord_fixed(ratio = 1) + xlab("") + ylab("") +
       ggtitle("Filling Time") +
       geom_raster() +
-      scale_fill_gradient('Frame', limits = c(1, max(x$gam$data$t)),
+      scale_fill_gradient('Frame', limits = c(1, time.max),
                           low = '#FF0000', high = '#000000') +
       mytheme
     return(p)
   }
 
   if (which == 'rate') {
+    rings$mid_rate[rings$mid_rate > rate.max] <- rate.max
     p <- ggplot(rings, aes(x = x, y = y, fill = mid_rate)) +
       coord_fixed(ratio = 1) + xlab("") + ylab("") +
       ggtitle("Filling Rate") +
       geom_raster() +
-      scale_fill_gradient('Rate', limits = c(0, max(x$gam$rings$mid_rate)),
+      scale_fill_gradient('Rate', limits = c(0, rate.max),
                           low = '#000000', high = '#FF0000') +
       mytheme
     return(p)

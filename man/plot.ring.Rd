@@ -5,7 +5,8 @@
 \title{plot.ring}
 \usage{
 \method{plot}{ring}(x, which = c("rate", "time", "intensity", "all"),
-  resolution = NA, ...)
+  resolution = NA, rate.max = max(x$gam$rings$mid_rate),
+  time.max = max(x$gam$data$t), intensity.max = 1, ...)
 }
 \arguments{
 \item{x}{CanaogramGAM to plot}
@@ -13,6 +14,12 @@
 \item{which}{Which plot type to create (rate, time, intensity, or all plots)}
 
 \item{resolution}{Resolution at which to make the plot (can be higher than the data resolution)}
+
+\item{rate.max}{Rate to plot at maximum brightness}
+
+\item{time.max}{Time to plot at maximum brightness}
+
+\item{intensity.max}{Intensity to plot at maximum brightness}
 
 \item{...}{<not used>}
 }

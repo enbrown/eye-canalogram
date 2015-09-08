@@ -2,6 +2,7 @@
 #'
 #' @param x       CanaogramGAM to plot
 #' @param scale.range   Scale for dots (see ggplot2::scale_size_continuous)
+#' @param time.max  Maximum time used for time scale
 #' @param ...     <not used>
 #'
 #' @return A ggplot2 object of the plot
@@ -14,7 +15,7 @@
 #' fit <- fit.gam(images)
 #' plot.dot(fit)
 #' }
-plot.dot <- function(x, scale.range = c(1,6), ...) {
+plot.dot <- function(x, scale.range = c(1,6), time.max = max(x$gam$data$t), ...) {
   if (! inherits(x, 'CanaogramGAM')) {
     stop('Function plot.images requires a CanaogramGAM object\n')
   }
@@ -35,12 +36,17 @@ plot.dot <- function(x, scale.range = c(1,6), ...) {
           legend.margin = grid::unit(0, 'mm'),
           plot.margin = grid::unit(c(0,0,0,0), 'mm'))
 
+  # Handle limits for the time and intensity
+  time.limits = c(0, time.max)
+  grid_metrics$mid_t[grid_metrics$mid_t > time.max] <- time.max
+  grid_metrics$max_fit[grid_metrics$max_fit > 1.0] <- 1.0
+
   p <- ggplot(grid_metrics, aes(x = x, y = y, col = mid_t, size = max_fit)) +
     coord_fixed(ratio = 1) +
     ggtitle("Individual Fits") + xlab("") + ylab("") +
     geom_point() +
-    scale_color_gradient("Time", low = "#FF0000", high = "#000000") +
-    scale_size_continuous("Intensity", range = scale.range) +
+    scale_color_gradient("Time", low = "#FF0000", high = "#000000", limits = time.limits) +
+    scale_size_continuous("Intensity", range = scale.range, limits = c(0, 1.0)) +
     mytheme
 
   return(p)
