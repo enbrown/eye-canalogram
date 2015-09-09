@@ -4,7 +4,7 @@
 \alias{read.images}
 \title{readImages}
 \usage{
-read.images(root, n = NULL, low = 64, clean = TRUE)
+read.images(root, n = NULL, low = 32, clean = TRUE)
 }
 \arguments{
 \item{root}{A directory/file root use to get all images for this eye}

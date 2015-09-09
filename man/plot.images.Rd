@@ -5,19 +5,14 @@
 \title{plot.images}
 \usage{
 \method{plot}{images}(x, frames = c(1, round(max(x$gam$data$t)/2),
-  max(x$gam$data$t)), scale = c("scaled", "raw"), masked = FALSE,
-  cornea = FALSE, ...)
+  max(x$gam$data$t)), masked = FALSE, ...)
 }
 \arguments{
 \item{x}{CanaogramGAM to plot}
 
 \item{frames}{Which frames to show}
 
-\item{scale}{Which image scale to use (raw intensities or scalled intensities)}
-
 \item{masked}{Show just the masked data or all data}
-
-\item{cornea}{Include the cornea in the output (or omit it)}
 
 \item{...}{<not used>}
 }
