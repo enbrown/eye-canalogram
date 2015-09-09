@@ -351,6 +351,7 @@ update.metrics <- function(obj, minimum_threshold = 0.05) {
            max_fit = max(fit),
            mid_fit = mean(range(fit))) %>%
     dplyr::filter(fit > max(minimum_threshold, mid_fit)) %>%
+    dplyr::arrange(t) %>%
     dplyr::summarize(min_fit = mean(min_fit),
               mid_fit = mean(mid_fit),
               max_fit = mean(max_fit),
@@ -408,11 +409,11 @@ update.grid.metrics <- function(obj, minimum_threshold = 0.0) {
 
   grid_metrics <- data %>%
     dplyr::group_by(x, y, r_band, theta_band) %>%
-    dplyr::arrange(t) %>%
     dplyr::mutate(min_fit = min(grid.fit),
           mid_fit = mean(range(grid.fit)),
           max_fit = max(grid.fit)) %>%
     dplyr::filter(grid.fit > max(minimum_threshold, mid_fit)) %>%
+    dplyr::arrange(t) %>%
     dplyr::summarize(min_fit = mean(min_fit),
               mid_fit = mean(mid_fit),
               max_fit = mean(max_fit),
@@ -426,5 +427,6 @@ update.grid.metrics <- function(obj, minimum_threshold = 0.0) {
 }
 if(getRversion() >= "2.15.1") utils::globalVariables(c('x', 'y',
                                                        'grid.fit',
+                                                       'r_band', 'theta_band',
                                                        'mid_fit', 'min_fit', 'max_fit', 't'))
 
