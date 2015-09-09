@@ -7,7 +7,31 @@
 \method{plot}{DeltaCanaogramGAM}(x, which = c("rate", "time", "intensity",
   "all"), max.time = 10, max.rate = 5, ...)
 }
+\arguments{
+\item{x}{DeltaCanaogramGAM object to plot}
+
+\item{which}{Which of 'rate', 'time', 'intensity', or 'all' to plot}
+
+\item{max.time}{Maximum time difference to show in time plots (for legend)}
+
+\item{max.rate}{Maximum rate difference to show in rate plots (for legend)}
+
+\item{...}{<not used>}
+}
+\value{
+A ggplot2 object of the plot
+}
 \description{
 plot.DeltaCanalogramGAM
+}
+\examples{
+\dontrun{
+images.before <- read.images('./data/before_T00', n = 5)
+images.after  <- read.images('./data/after_T00', n = 5)
+fit.before <- fit.gam(images.before)
+fit.after <- fit.gam(images.after)
+delta.fit <- get.change(fit.before, fit.after)
+plot(delta.fit, which = 'all', max.time = 10, max.rate = 5)
+}
 }
 

@@ -59,10 +59,33 @@ delta.gam <- function(before, after) {
   return(invisible(obj))
 }
 
+if(getRversion() >= "2.15.1") utils::globalVariables(c('x.x', 'y.x',
+                                                       'mid_fit.y', 'mid_fit.x',
+                                                       'mid_t.y', 'mid_t.x',
+                                                       'mid_rate.y', 'mid_rate.x',
+                                                       'r_band', 'theta_band'))
+
 #' plot.DeltaCanalogramGAM
 #'
-#' @export
+#' @param x         DeltaCanaogramGAM object to plot
+#' @param which     Which of 'rate', 'time', 'intensity', or 'all' to plot
+#' @param max.time  Maximum time difference to show in time plots (for legend)
+#' @param max.rate  Maximum rate difference to show in rate plots (for legend)
+#' @param ...       <not used>
 #'
+#' @return A ggplot2 object of the plot
+#' @export
+#' @import ggplot2
+#'
+#' @examples
+#' \dontrun{
+#' images.before <- read.images('./data/before_T00', n = 5)
+#' images.after  <- read.images('./data/after_T00', n = 5)
+#' fit.before <- fit.gam(images.before)
+#' fit.after <- fit.gam(images.after)
+#' delta.fit <- get.change(fit.before, fit.after)
+#' plot(delta.fit, which = 'all', max.time = 10, max.rate = 5)
+#' }
 plot.DeltaCanaogramGAM <- function(x, which = c('rate', 'time', 'intensity', 'all'),
                                    max.time = 10, max.rate = 5,
                                    ...) {
@@ -84,7 +107,7 @@ plot.DeltaCanaogramGAM <- function(x, which = c('rate', 'time', 'intensity', 'al
       plots[[i]] <- p
     }
     plots$layout <- matrix(seq.int(length(which)), nrow = 1, byrow = TRUE)
-    plots <- do.call(EyeCanalogram:::multiplot, plots)
+    plots <- do.call(multiplot, plots)
     return(plots)
   }
 
@@ -152,3 +175,5 @@ plot.DeltaCanaogramGAM <- function(x, which = c('rate', 'time', 'intensity', 'al
 
   stop("Unknown plot for DeltaCanaogramGAM object requested.")
 }
+
+if(getRversion() >= "2.15.1") utils::globalVariables(c('delta_mid_fit', 'delta_mid_t', 'delta_mid_rate'))
