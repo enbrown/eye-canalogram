@@ -14,7 +14,7 @@
 #' images <- read.images('./data/Trial-1/one gree_T00', n = 5)
 #' plot(images)
 #' }
-read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
+read.images <- function(root, n = NULL, low = 32, clean = TRUE) {
 
   res <- list(
     path = normalizePath(dirname(root)),
@@ -37,8 +37,8 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
   res$files <- grep(res$root, res$files,
                     fixed = TRUE, value = TRUE)
 
-  # Restrict to TIFF files
-  res$files <- grep('\\.(tif|tiff)$', res$files,
+  # Restrict to TIFF and PNG files
+  res$files <- grep('\\.(tif|tiff|png)$', res$files,
                     ignore.case = TRUE, perl = TRUE, value = TRUE)
 
   # Sort the files
@@ -53,7 +53,7 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
   res$files.path <- file.path(res$path, res$files)
 
   # Load all of the files
-  message('Reading images.')
+  message("Reading '", res$root, "' images in directory '", res$path, "'.")
   res$images <- lapply(res$files.path, function(f) {
     r <- list(file = f,
               image = NULL,
@@ -61,7 +61,13 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
               h = NA,
               min = NA,
               max = NA)
-    r$image <- EBImage::readImage(f, convert = FALSE, info = TRUE, as.is = TRUE)
+    if (grepl('\\.(tif|tiff)$', f)) {
+      r$image <- EBImage::readImage(f, convert = FALSE, info = TRUE, as.is = TRUE)
+    } else if (grepl('\\.png$', f)) {
+      r$image <- EBImage::readImage(f, info = TRUE)
+    } else {
+      stop("Don't know how to read image ", f, " in function read.images")
+    }
     r$image <- EBImage::flip(r$image)
     r$w <- ncol(r$image)
     r$h <- nrow(r$image)
@@ -75,10 +81,21 @@ read.images <- function(root, n = NULL, low = 64, clean = TRUE) {
   res$data.low <- NA
 
   # See if there is an cornea mask
-  cornea_mask <- file.path(res$path, 'mask.tif')
-  if (file.exists(cornea_mask)) {
+  cornea_mask <- NA
+  if (file.exists(file.path(res$path, 'mask.tif'))) {
+    cornea_mask <- file.path(res$path, 'mask.tif')
+  } else if (file.exists(file.path(res$path, 'mask.tiff'))) {
+    cornea_mask <- file.path(res$path, 'mask.tiff')
+  } else if (file.exists(file.path(res$path, 'mask.png'))) {
+    cornea_mask <- file.path(res$path, 'mask.png')
+  }
+  if (!is.na(cornea_mask) && file.exists(cornea_mask)) {
     message("Using cornea mask found in '", cornea_mask, "'.")
-    mask <- EBImage::readImage(cornea_mask, convert = TRUE, info = TRUE, as.is = TRUE)
+    if (grepl('\\.(tif|tiff)$', cornea_mask)) {
+      mask <- EBImage::readImage(cornea_mask, convert = TRUE, info = TRUE, as.is = TRUE)
+    } else if (grepl('\\.png$', cornea_mask)) {
+      mask <- EBImage::readImage(cornea_mask, info = TRUE)
+    }
     mask <- EBImage::flip(mask)
     # Convert to grayscale (in case the image is saved as RGB)
     mask <- EBImage::channel(mask, 'gray')

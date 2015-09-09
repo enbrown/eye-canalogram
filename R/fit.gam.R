@@ -408,9 +408,10 @@ update.grid.metrics <- function(obj, minimum_threshold = 0.0) {
 
   grid_metrics <- data %>%
     dplyr::group_by(x, y, r_band, theta_band) %>%
+    dplyr::arrange(t) %>%
     dplyr::mutate(min_fit = min(grid.fit),
-           max_fit = max(grid.fit),
-           mid_fit = mean(range(grid.fit))) %>%
+          mid_fit = mean(range(grid.fit)),
+          max_fit = max(grid.fit)) %>%
     dplyr::filter(grid.fit > max(minimum_threshold, mid_fit)) %>%
     dplyr::summarize(min_fit = mean(min_fit),
               mid_fit = mean(mid_fit),
