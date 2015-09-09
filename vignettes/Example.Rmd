@@ -19,7 +19,7 @@ library(EyeCanalogram)
 ## Load Data
 
 ```{r}
-demo_directory <- system.file('Demo-Eye', 'Pre', package = 'EyeCanalogram')
+demo_directory <- system.file('extdata', 'Demo-Eye', 'Pre', package = 'EyeCanalogram')
 demo_root <- file.path(demo_directory, 'Pre-')
 images <- read.images(demo_root, low = 10)
 ```
@@ -63,11 +63,11 @@ plot.dot(fit, scale.range = c(1, 5.5), time.max = 50)
 ## Load Data
 
 ```{r}
-demo_directory <- system.file('Demo-Eye', 'Pre', package = 'EyeCanalogram')
+demo_directory <- system.file('extdata', 'Demo-Eye', 'Pre', package = 'EyeCanalogram')
 demo_before <- file.path(demo_directory, 'Pre-')
 before.images <- read.images(demo_before, low = 10)
 
-demo_directory <- system.file('Demo-Eye', 'Post', package = 'EyeCanalogram')
+demo_directory <- system.file('extdata', 'Demo-Eye', 'Post', package = 'EyeCanalogram')
 demo_after <- file.path(demo_directory, 'Post-')
 after.images <- read.images(demo_after, low = 10)
 ```
