@@ -1,0 +1,226 @@
+---
+title: "Example Analysis with Eye-Canalogram"
+author: "Eric N. Brown, MD, PhD"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    fig_caption: yes
+vignette: >
+  %\VignetteIndexEntry{Example Analysis with Eye-Canalogram}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+## Load the Packages
+```{r}
+library(EyeCanalogram)
+```
+
+## Load Data
+
+```{r}
+demo_directory <- system.file('Demo-Eye', 'Pre', package = 'EyeCanalogram')
+demo_root <- file.path(demo_directory, 'Pre-')
+images <- read.images(demo_root, low = 10)
+```
+
+## Display raw data
+
+```{r, fig.show='hold', fig.cap = "Raw low-resolution images", fig.width = 7}
+plot(images)
+```
+
+## Fit a Generalized Additive Model
+
+```{r}
+fit <- fit.gam(images)
+```
+
+```{r, fig.width = 7, fig.cap = "Images showing all data."}
+plot.images(fit, frames = c(1, 10, 20), masked = FALSE)
+```
+
+```{r, fig.width = 7, fig.cap = "Images showing only those datapoints that will be processed (for rings)."}
+plot.images(fit, frames = c(1, 10, 20), masked = TRUE)
+```
+
+## Plot the Fit Model
+
+```{r, fig.width = 7, fig.height = 5, fig.cap = "Plot GAM fit showing fluorescence uptake by clock-hour and radial ring."}
+plot(fit)
+```
+
+```{r, fig.width = 7, fig.cap = "Ring plots of fluorescence uptake metrics"}
+plot.ring(fit, which = 'all')
+```
+
+```{r, fig.width = 5, fig.height = 4, fig.cap = "Dot plot of fluorescence uptake."}
+plot.dot(fit, scale.range = c(1, 5.5), time.max = 50)
+```
+
+# Process Pre- and Post-Treatment Data
+
+## Load Data
+
+```{r}
+demo_directory <- system.file('Demo-Eye', 'Pre', package = 'EyeCanalogram')
+demo_before <- file.path(demo_directory, 'Pre-')
+before.images <- read.images(demo_before, low = 10)
+
+demo_directory <- system.file('Demo-Eye', 'Post', package = 'EyeCanalogram')
+demo_after <- file.path(demo_directory, 'Post-')
+after.images <- read.images(demo_after, low = 10)
+```
+
+## Fit Models
+
+```{r}
+before <- fit.gam(before.images, r_bands = 3,
+                  fit.grid = TRUE, fit.bands = TRUE)
+after <- fit.gam(after.images, r_bands = 3,
+                 fit.grid = TRUE, fit.bands = TRUE)
+```
+
+```{r}
+rm(before.images)
+rm(after.images)
+```
+
+## Plot figures
+
+### Create a `ggplot` theme
+
+```{r}
+library(ggplot2)
+mytheme <- ggplot2::theme_bw(base_size = 14) +
+  ggplot2::theme(legend.position="right",
+                 axis.ticks = ggplot2::element_blank(),
+                 axis.text.x = ggplot2::element_blank(),
+                 axis.text.y = ggplot2::element_blank(),
+                 panel.border = ggplot2::element_blank(),
+                 panel.grid = ggplot2::element_blank(),
+                 panel.margin = grid::unit(1, 'mm'),
+                 legend.margin = grid::unit(0, 'mm'),
+                 legend.key.size = grid::unit(0.8, 'lines'),
+                 legend.key = ggplot2::element_rect(fill = NULL, color = "white"),
+                 plot.margin = grid::unit(c(0,0,0,0), 'mm'))
+```
+
+### Plot the individual images
+
+```{r, fig.width = 3.5, fig.height = 2.5}
+p1 <- plot.dot(before, scale.range = c(1, 5.5), time.max = 50) +
+  mytheme 
+print(p1)
+
+p2 <- plot.ring(before, which = 'rate', resolution = 100, rate.max = 10) +
+  mytheme 
+print(p2)
+
+p3 <- plot.dot(after, scale.range = c(1, 5.5), time.max = 50) +
+  mytheme
+print(p3)
+
+p4 <- plot.ring(after, which = 'rate', resolution = 100, rate.max = 10) +
+  mytheme
+print(p4)
+```
+
+### Plot all images together
+
+```{r, fig.width = 7, fig.height = 5}
+EyeCanalogram:::multiplot(
+  p1 + ylab("pre") + ggtitle("") + theme(axis.title=element_text(size = 32)),
+  p2 + ggtitle(""),
+  p3 + ylab("post") + ggtitle("") + theme(axis.title=element_text(size = 32)),
+  p4 + ggtitle(""),
+  layout = matrix(c(1,2,3,4), nrow = 2, byrow = TRUE)
+)
+```
+
+### Compute difference maps
+
+```{r, fig.width = 7, fig.height = 2.5}
+delta <- delta.gam(before, after)
+
+p1 <- plot(delta, which ='intensity') + mytheme
+p2 <- plot(delta, which = 'rate') + mytheme
+EyeCanalogram:::multiplot(
+  p1, p2,
+  layout = matrix(c(1,2), nrow = 1, byrow = TRUE)
+)
+```
+
+## Manipulate data (average pre and post)
+
+### Load support packages
+
+```{r}
+library(dplyr)
+```
+
+### Join all fitted datasets together
+```{r}
+a <- before$gam$grid_metrics[, c('x', 'y', 'r_band', 'theta_band',
+                                 'min_fit', 'mid_fit', 'max_fit',
+                                 'mid_t', 'mid_rate')]
+b <- after$gam$grid_metrics[, c('x', 'y', 'r_band', 'theta_band',
+                                'min_fit', 'mid_fit', 'max_fit',
+                                'mid_t', 'mid_rate')]
+
+all <- rbind(a, b)
+
+all <- all %>%
+  dplyr::group_by(r_band, theta_band) %>%
+  dplyr::summarise_each(dplyr::funs(mean)) %>%
+  dplyr::ungroup()
+```
+
+### Create a dummy grid with a hole for a circular cornea
+```{r}
+size <- 64
+grid <- expand.grid(x = -floor(size*4/3):ceiling(size*4/3), y = -size:size)
+grid$r <- round(sqrt(grid$x**2 + grid$y**2) - size / 4)
+grid$r_band <- round(grid$r / 1)
+grid <- grid[grid$r_band >= 0,]
+grid$theta <- atan2(-grid$x, -grid$y) * 180.0 / pi + 180.0
+grid$theta_band <- 10 * round(grid$theta / 10)
+
+ggplot(grid, aes(x = x, y = y, fill = r_band)) + geom_raster() + 
+  coord_fixed(ratio = 1) + mytheme
+```
+
+### Merge fitted metrics onto the dummy grid
+```{r}
+all <- dplyr::inner_join(all, grid, by = c('r_band', 'theta_band'))
+all <- all %>%
+  dplyr::mutate(x = x.y, y = y.y) %>%
+  dplyr::group_by(x, y) %>%
+  dplyr::summarise_each(dplyr::funs(mean)) %>%
+  dplyr::ungroup()
+```
+
+### Restrict the range of values for the fitted metrics
+```{r}
+all$mid_fit[all$mid_fit < 0.0] <- 0.0
+all$mid_fit[all$mid_fit > 1.0] <- 1.0
+all$mid_t[all$mid_t < 0] <- 0.0
+all$mid_t[all$mid_t > 50] <- 50.0
+all$mid_rate[all$mid_rate < 0.0] <- 0.0
+all$mid_rate[all$mid_rate > 5.0] <- 5.0
+```
+
+### Plot data
+```{r, fig.width = 4, fig.height = 3}
+ggplot(all, aes(x = x, y = y, fill = mid_fit)) + geom_raster() +
+  coord_fixed(ratio = 1) + ggtitle("Average Intensity") + xlab("") + ylab("") +
+  scale_fill_gradient("Intensity", high = "red", limits = c(0.0, 1.0)) + mytheme
+
+ggplot(all, aes(x = x, y = y, fill = mid_t)) + geom_raster() +
+  coord_fixed(ratio = 1) + ggtitle("Average Filling Time") + xlab("") + ylab("") +
+  scale_fill_gradient("Time", low = "red", high = "black", limits = c(0, 50)) + mytheme
+
+ggplot(all, aes(x = x, y = y, fill = mid_rate)) + geom_raster() +
+  coord_fixed(ratio = 1) + ggtitle("Average Filling Rate") + xlab("") + ylab("") +
+  scale_fill_gradient("Rate", high = "red", limits = c(0.0, 5.0)) + mytheme
+```
