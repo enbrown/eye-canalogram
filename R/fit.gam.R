@@ -21,7 +21,7 @@
 #' plot.ring(fit)
 #' }
 fit.gam <- function(obj, r_bands = 5, theta_band_size = 10,
-                    fit.grid = TRUE, fit.bands = TRUE) {
+                    fit.grid = TRUE, fit.bands = TRUE, fit.coarse.bands = FALSE) {
   if (! inherits(obj, 'CanalogramImages')) {
     stop('Function fit.gam only works on CanalogramImages objects\n')
   }
@@ -102,10 +102,11 @@ fit.gam <- function(obj, r_bands = 5, theta_band_size = 10,
 
       # Determine ring metrics
       message('Processing ring metrics')
-      obj <- update.metrics(obj)
+      obj <- update.metrics(obj, fit.coarse.bands = fit.coarse.bands)
 
       # Create rings
-      obj <- update.rings(obj)
+      message('Updating rings')
+      obj <- update.rings(obj, fit.coarse.bands = fit.coarse.bands)
     })
   }
 
@@ -265,6 +266,7 @@ update.fit <- function(obj) {
 
   # Get the object's data
   clock_data <- obj$gam$clock_data
+  data <- obj$gam$data
   r_bands <- obj$gam$options$r_bands
   if (length(unique(clock_data$r_band)) < r_bands) {
     warning('Fewer radial bands can be created than requested: ',
@@ -272,24 +274,48 @@ update.fit <- function(obj) {
     r_bands <- length(unique(clock_data$r_band))
   }
 
-  # Fit the GAM model
-  fit <- gam(z ~ s(clock,              bs = 'cc',                k = 12) +
-                 s(r_band,             bs = 'cs',                k = min(r_bands, 5)) +
-                 s(t,                  bs = 'cs',                k = 5) +
-                 te(clock, r_band, t,  bs = c('cc', 'cs', 'cs'), k = c(12, min(r_bands, 5), 5)),
-             weights = clock_data$area,
-             knots = list(clock = c(0, 12)),
-             data = clock_data)
+  # Fit the GAM model to the clock data alone (coarse)
+  message('Fitting clock data (very low resolution)')
+  fit.clock <- gam(z ~ s(clock,              bs = 'cc',                k = 12) +
+                     s(r_band,             bs = 'cs',                k = min(r_bands, 5)) +
+                     s(t,                  bs = 'cs',                k = 5) +
+                     te(clock, r_band, t,  bs = c('cc', 'cs', 'cs'), k = c(12, min(r_bands, 5), 5)),
+                   weights = clock_data$area,
+                   knots = list(clock = c(0, 12)),
+                   data = clock_data)
 
   # Add the prediction to the data
   clock_data <- cbind(clock_data,
-                      predict(fit, type = 'response', se.fit = TRUE))
+                      predict(fit.clock, type = 'response', se.fit = TRUE))
   attributes(clock_data$fit) <- NULL
   attributes(clock_data$se.fit) <- NULL
 
+  # Update the object
+  obj$gam$fit.clock <- fit.clock
+  obj$gam$clock_data <- clock_data
+
+  # Fit the GAM model to the low-resolution data (finer than clock data)
+  message('Fitting low-resolution data')
+  sel <- data$r_band <= (r_bands + 1)
+  fit <- gam(z ~ s(theta,         bs = 'cc',                k = 12) +
+               s(r,             bs = 'cs',                k = min(r_bands, 5)) +
+               s(t,             bs = 'cs',                k = 5) +
+               te(theta, r, t,  bs = c('cc', 'cs', 'cs'), k = c(12, min(r_bands, 5), 5)),
+             knots = list(theta = c(0, 360)),
+             data = data[sel,])
+
+  # Add the prediction to the data
+  data$fit <- NA
+  data$se.fit <- NA
+  x <- predict(fit, type = 'response', se.fit = TRUE)
+  data$fit[sel] <- x$fit
+  data$se.fit[sel] <- x$se.fit
+  attributes(data$fit) <- NULL
+  attributes(data$se.fit) <- NULL
+
   # Update the object and return it
   obj$gam$fit <- fit
-  obj$gam$clock_data <- clock_data
+  obj$gam$data <- data
   return(invisible(obj))
 }
 
@@ -331,7 +357,7 @@ update.fit.grid <- function(obj) {
 }
 if(getRversion() >= "2.15.1") utils::globalVariables(c('cornea', 'x', 'y'))
 
-update.metrics <- function(obj, minimum_threshold = 0.05) {
+update.metrics <- function(obj, minimum_threshold = 0.05, fit.coarse.bands = FALSE) {
   if (! inherits(obj, 'CanaogramGAM')) {
     stop('Function update.fit requires a CanaogramGAM object\n')
   }
@@ -342,24 +368,58 @@ update.metrics <- function(obj, minimum_threshold = 0.05) {
     stop('Function update.fit needs to be run before update.fit\n')
   }
 
-  # Get the object's data
-  clock_data <- obj$gam$clock_data
+#   # Get the object's data
+#   clock_data <- obj$gam$clock_data
+#
+#   clock_metrics <- clock_data %>%
+#     dplyr::group_by(clock, r_band) %>%
+#     dplyr::mutate(min_fit = min(fit),
+#            max_fit = max(fit),
+#            mid_fit = mean(range(fit))) %>%
+#     dplyr::filter(fit > max(minimum_threshold, mid_fit)) %>%
+#     dplyr::arrange(t) %>%
+#     dplyr::summarize(min_fit = mean(min_fit),
+#               mid_fit = mean(mid_fit),
+#               max_fit = mean(max_fit),
+#               mid_t = dplyr::first(t)) %>%
+#     dplyr::mutate(mid_rate = mid_fit / mid_t * 100) %>%
+#     dplyr::ungroup()
+#
+#   # Update the object
+#   obj$gam$clock_metrics <- clock_metrics
 
-  clock_metrics <- clock_data %>%
-    dplyr::group_by(clock, r_band) %>%
+  # Get the object's data
+  data <- obj$gam$data
+
+  # Update the metrics by x-y location
+  xy_metrics <- data %>%
+    dplyr::group_by(x, y) %>%
     dplyr::mutate(min_fit = min(fit),
-           max_fit = max(fit),
-           mid_fit = mean(range(fit))) %>%
+                  max_fit = max(fit),
+                  mid_fit = mean(range(fit))) %>%
     dplyr::filter(fit > max(minimum_threshold, mid_fit)) %>%
     dplyr::arrange(t) %>%
+    dplyr::ungroup() %>%
+    dplyr::group_by(x, y, clock, r_band) %>%
     dplyr::summarize(min_fit = mean(min_fit),
-              mid_fit = mean(mid_fit),
-              max_fit = mean(max_fit),
-              mid_t = dplyr::first(t)) %>%
+                     mid_fit = mean(mid_fit),
+                     max_fit = mean(max_fit),
+                     mid_t = dplyr::first(t)) %>%
+    dplyr::mutate(mid_rate = mid_fit / mid_t * 100) %>%
+    dplyr::ungroup()
+  xy_metrics$clock <- as.integer(xy_metrics$clock)
+  xy_metrics$r_band <- as.integer(xy_metrics$r_band)
+  clock_metrics <- xy_metrics %>%
+    dplyr::group_by(clock, r_band) %>%
+    dplyr::summarize(min_fit = mean(min_fit),
+                     mid_fit = mean(mid_fit),
+                     max_fit = mean(max_fit),
+                     mid_t = mean(mid_t)) %>%
     dplyr::mutate(mid_rate = mid_fit / mid_t * 100) %>%
     dplyr::ungroup()
 
   # Update the object and return it
+  obj$gam$xy_metrics <- xy_metrics
   obj$gam$clock_metrics <- clock_metrics
   return(invisible(obj))
 }
@@ -368,7 +428,7 @@ if(getRversion() >= "2.15.1") utils::globalVariables(c('clock', 'r_band',
                                                        'min_fit', 'mid_fit', 'max_fit',
                                                        't'))
 
-update.rings <- function(obj) {
+update.rings <- function(obj, fit.coarse.bands = FALSE) {
   if (! inherits(obj, 'CanaogramGAM')) {
     stop('Function update.fit requires a CanaogramGAM object\n')
   }

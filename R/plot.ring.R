@@ -23,7 +23,7 @@ plot.ring <- function(x,
                       which = c('rate', 'time', 'intensity', 'all'),
                       resolution = NA,
                       rate.max = max(x$gam$rings$mid_rate),
-                      time.max = max(x$gam$data$t),
+                      time.max = max(x$gam$data$t), fill = TRUE,
                       intensity.max = 1.0,
                       ...) {
   if (! inherits(x, 'CanaogramGAM')) {
@@ -66,6 +66,9 @@ plot.ring <- function(x,
     rings$max_fit[is.na(rings$max_fit)] <- 0
     rings$mid_t[is.na(rings$mid_t)] <- max(x$gam$data$t)
     rings$mid_rate[is.na(rings$mid_rate)] <- 0
+    if (fill) {
+      rings$mid_t[rings$mid_t > time.max] <- time.max
+    }
   }
 
   mytheme <- theme_bw() +

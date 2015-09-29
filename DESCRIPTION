@@ -1,8 +1,8 @@
 Package: EyeCanalogram
 Type: Package
 Title: Generalized Additive Modeling of Ophthalmic Fluorescence Canalograms
-Version: 0.3.1
-Date: 2015-08-05
+Version: 0.3.2
+Date: 2015-09-29
 Authors@R: c(person("Eric", "Brown", role = c("aut", "cre"),
                      email = "eric.n.brown@gmail.com"))
 Description: R package to analyze ophthalmic fluorscence image sets to determine
