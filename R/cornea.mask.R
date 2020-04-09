@@ -1,8 +1,8 @@
 #' cornea.mask
 #'
-#' @param obj         CanalogramImages object of images to rescale
+#' @param obj         CanalogramImages object of images to remove cornea
 #'
-#' @return CanalogramImages object of rescaled images
+#' @return CanalogramImages object with cornea removed
 #'
 #' Remove all (high-resolution) data from the region of the cornea using the
 #' cornea mask.
@@ -13,7 +13,7 @@
 #' }
 cornea.mask <- function(obj) {
   if (! 'CanalogramImages' %in% class(obj)) {
-    stop("Function rescale.images is only for CanalogramImages")
+    stop("Function cornea.mask is only for CanalogramImages")
   }
   if (! inherits(obj$cornea$mask, 'Image')) {
     warning('Unable to remove cornea mask since none available')
@@ -24,11 +24,6 @@ cornea.mask <- function(obj) {
   obj$cornea$mask <- obj$cornea$mask > 0
 
   # Go through each raw image and remove the cornea
-  #obj$images <- lapply(obj$images, function(image) {
-  #  image$image <- image$image * (1.0 - obj$cornea$mask)
-  #  return(image)
-  #})
-
   data <- EBImage::imageData(obj$data)
   mask <- EBImage::imageData(obj$cornea$mask)
   for (i in 1:(EBImage::numberOfFrames(obj$data))) {

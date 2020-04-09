@@ -49,5 +49,25 @@ rescale.images <- function(obj, resolution) {
     obj$mask.dist <- NA
   }
 
+  # Handle region-of-interest mask
+  if (inherits(obj$ROI$mask, 'Image')) {
+    # First, make sure the mask is binary
+    mask <- (obj$ROI$mask > 0)
+
+    # Convert binary mask back to a real number
+    mask <- mask * 1.0
+
+    # Resize this scaled mask
+    obj$ROI$mask.low <- EBImage::resize(mask, h = resolution)
+
+    # Re-scale the data by how much is inside the ROI (partial-volume effect)
+    scale <- 1.0 / obj$ROI$mask.low
+    scale <- scale * is.finite(scale)
+
+    for (i in 1:(EBImage::numberOfFrames(obj$data.low))) {
+      obj$data.low[,,i] <- obj$data.low[,,i] * scale
+    }
+  }
+
   return(obj)
 }

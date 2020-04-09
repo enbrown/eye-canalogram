@@ -113,6 +113,39 @@ read.images <- function(root, n = NULL, low = 32, clean = TRUE) {
   # Apply the cornea mask
   res <- cornea.mask(res)
 
+  # See if there is a region-of-interest to process
+  roi_mask <- NA
+  if (file.exists(file.path(res$path, 'roi.tif'))) {
+    roi_mask <- file.path(res$path, 'roi.tif')
+  } else if (file.exists(file.path(res$path, 'roi.tiff'))) {
+    roi_mask <- file.path(res$path, 'roi.tiff')
+  } else if (file.exists(file.path(res$path, 'roi.png'))) {
+    roi_mask <- file.path(res$path, 'roi.png')
+  }
+  if (!is.na(roi_mask) && file.exists(roi_mask)) {
+    message("Using region-of-interest mask found in '", roi_mask, "'.")
+    if (grepl('\\.(tif|tiff)$', roi_mask)) {
+      mask <- EBImage::readImage(roi_mask, convert = TRUE, info = TRUE, as.is = TRUE)
+    } else if (grepl('\\.png$', roi_mask)) {
+      mask <- EBImage::readImage(roi_mask, info = TRUE)
+    }
+    mask <- EBImage::flip(mask)
+    # Convert to grayscale (in case the image is saved as RGB)
+    mask <- EBImage::channel(mask, 'gray')
+    # Make sure that the mask is binary
+    mask <- mask > 0
+    # Save the ROI mask information
+    res$ROI <- list(mask = mask,
+                    file = roi_mask)
+  } else {
+    res$ROI <- list(mask = NA,
+                    file = NA)
+  }
+  rm(roi_mask)
+
+  # Apply the region-of-interest mask
+  res <- roi.mask(res)
+
   # Rescale the images
   res <- rescale.images(res, low)
 
